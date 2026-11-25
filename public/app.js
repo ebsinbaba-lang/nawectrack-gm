@@ -1,4 +1,4 @@
-// Replace YOUR_SUPABASE_ANON_KEY with your Publishable key from Supabase Project Settings -> API Keys
+// Supabase Configuration
 const SUPABASE_URL = "https://ggmsdvicirbfodswzilf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_jnJt6-2gsHXdbMdQEEWL5w_00k4bsE1";
 
@@ -276,7 +276,6 @@ function initLocationPickers() {
       wardSelect.appendChild(opt);
     });
 
-    // Add Custom Area option at the bottom
     const customOpt = document.createElement("option");
     customOpt.value = CUSTOM_WARD_VALUE;
     customOpt.textContent = "➕ Other (Type Custom Town/Area)";
@@ -344,3 +343,6 @@ function initReportControls() {
 async function fetchReports() {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await sb
+    .from("nawec_reports")
+    .select("*")
+    .gte("created_at", since)
