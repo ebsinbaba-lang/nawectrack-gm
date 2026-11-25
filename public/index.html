@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="NawecTrack GM — Live electricity & water outage tracker, Cashpower unit calculator, and NAWEC station directory for The Gambia." />
+  <title>NawecTrack GM | Live Power & Water Tracker</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/png" href="/icon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://jsdelivr.net"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-badge">GM</span>
+        <div>
+          <h1>NawecTrack GM</h1>
+          <p class="subtitle">Live Community Power &amp; Water Status</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="liveIndicator" class="live-pill" title="Connected to Realtime">● Live</span>
+        <button id="installBtn" class="btn-install hidden" type="button">⬇ Install App</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Official Admin Banner (Visible when active alerts exist) -->
+    <section id="officialAlertsSection" class="alerts-container hidden" aria-live="polite"></section>
+
+    <!-- Admin Control Panel (Visible only via /?admin=1) -->
+    <section id="adminPanel" class="card admin-card hidden">
+      <div class="card-header">
+        <h2>🛡️ Official NAWEC / Admin Override</h2>
+        <span class="badge-sec">RBAC Protected</span>
+      </div>
+
+      <!-- Admin Login Form -->
+      <form id="adminLoginForm" class="stack">
+        <p class="muted">Sign in with your verified admin credentials to broadcast official feeder or maintenance alerts.</p>
+        <div class="grid-2">
+          <input type="email" id="adminEmail" placeholder="Admin email" required autocomplete="username" />
+          <input type="password" id="adminPassword" placeholder="Password" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn-primary">Sign In as Admin</button>
+        <p id="adminLoginMsg" class="feedback-msg"></p>
+      </form>
+
+      <!-- Admin Broadcast Form (Shown once authenticated) -->
+      <div id="adminControls" class="hidden stack">
+        <div class="admin-bar">
+          <span id="adminUserLabel" class="muted"></span>
+          <button type="button" id="adminLogoutBtn" class="btn-outline btn-sm">Sign Out</button>
+        </div>
+        <form id="alertBroadcastForm" class="stack">
+          <div class="grid-2">
+            <div>
+              <label for="adminCity">Target City</label>
+              <select id="adminCity" required></select>
+            </div>
+            <div>
+              <label for="adminWard">Ward (Optional — blank = whole city)</label>
+              <select id="adminWard">
+                <option value="">All Wards (City-Wide)</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div>
+              <label for="adminUtility">Utility</label>
+              <select id="adminUtility" required>
+                <option value="electricity">Electricity</option>
+                <option value="water">Water</option>
+                <option value="both">Both Electricity &amp; Water</option>
+              </select>
+            </div>
+            <div>
+              <label for="adminStatus">Official Status</label>
+              <select id="adminStatus" required>
+                <option value="OFF">🔴 OFF (Feeder Outage)</option>
+                <option value="PARTIAL">🟡 PARTIAL (Load Shedding)</option>
+                <option value="MAINTENANCE">🟠 MAINTENANCE</option>
+                <option value="ON">🟢 ON (Restored)</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label for="adminMessage">Official Notice (max 300 chars)</label>
+            <input type="text" id="adminMessage" maxlength="300" placeholder="e.g., Brikama Feeder 2 under scheduled maintenance until 18:00." required />
+          </div>
+          <button type="submit" class="btn-primary">Broadcast Official Alert</button>
+          <p id="adminBroadcastMsg" class="feedback-msg"></p>
+        </form>
+        <div id="activeAdminAlertsList" class="stack"></div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="trackerTab" type="button">⚡ Live Status</button>
+      <button class="tab" data-tab="cashpowerTab" type="button">🧮 Cashpower Calc</button>
+      <button class="tab" data-tab="stationsTab" type="button">🏭 Power Stations</button>
+    </nav>
+
+    <!-- TAB 1: Live Outage Tracker & Reporter -->
+    <section id="trackerTab" class="tab-panel active">
+      <!-- 3-Level Gambian Location Picker -->
+      <div class="card">
+        <h2>📍 Select Your Area</h2>
+        <div class="grid-3">
+          <div>
+            <label for="citySelect">1. City / Area</label>
+            <select id="citySelect"></select>
+          </div>
+          <div>
+            <label for="wardSelect">2. Town / Ward</label>
+            <select id="wardSelect"></select>
+          </div>
+          <div>
+            <label for="landmarkInput">3. Landmark / Junction (Optional)</label>
+            <input type="text" id="landmarkInput" maxlength="100" placeholder="e.g., Near Jamisa Junction" />
+          </div>
+        </div>
+
+        <!-- City & Ward Consensus Summary -->
+        <div class="status-grid">
+          <div class="status-box" id="citySummaryCard">
+            <span class="status-label" id="citySummaryTitle">City Overview</span>
+            <strong class="status-value" id="citySummaryStatus">Loading...</strong>
+            <small class="muted" id="citySummaryMeta">Checking wards...</small>
+          </div>
+          <div class="status-box" id="wardElecCard">
+            <span class="status-label">⚡ Electricity (<span id="selectedWardName1">Ward</span>)</span>
+            <strong class="status-value" id="wardElecStatus">Loading...</strong>
+            <small class="muted" id="wardElecMeta">No recent reports</small>
+          </div>
+          <div class="status-box" id="wardWaterCard">
+            <span class="status-label">💧 Water (<span id="selectedWardName2">Ward</span>)</span>
+            <strong class="status-value" id="wardWaterStatus">Loading...</strong>
+            <small class="muted" id="wardWaterMeta">No recent reports</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1-Tap Community Report Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2>📢 Report Current Status</h2>
+          <span class="badge-sec" title="15-minute anti-spam rate limit enforced in PostgreSQL">🔒 15m Anti-Spam</span>
+        </div>
+        <p class="muted">Help neighbors in <strong id="reportLocationLabel">your ward</strong> know if light or water is on right now.</p>
+
+        <div class="utility-toggle">
+          <button type="button" class="util-btn active" data-utility="electricity">⚡ Electricity</button>
+          <button type="button" class="util-btn" data-utility="water">💧 Water</button>
+        </div>
+
+        <div class="report-actions">
+          <button type="button" class="btn-status btn-on" data-status="ON">🟢 Light is ON</button>
+          <button type="button" class="btn-status btn-low" data-status="LOW_VOLTAGE">🟡 Low Voltage</button>
+          <button type="button" class="btn-status btn-off" data-status="OFF">🔴 Light is OFF</button>
+        </div>
+        <p id="reportFeedback" class="feedback-msg" role="status"></p>
+      </div>
+
+      <!-- Recent Community Feed -->
+      <div class="card">
+        <div class="card-header">
+          <h2>🕒 Recent Neighbor Reports (Last 24h)</h2>
+          <button type="button" id="refreshFeedBtn" class="btn-outline btn-sm">Refresh</button>
+        </div>
+        <ul id="reportsFeed" class="feed-list">
+          <li class="muted">Loading live reports...</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- TAB 2: Exact Cashpower Unit Calculator -->
+    <section id="cashpowerTab" class="tab-panel hidden">
+      <div class="card">
+        <h2>🧮 NAWEC Cashpower Unit Calculator</h2>
+        <p class="muted">Calculates exact kWh units using PURA prepaid tariffs rounded to 1 decimal place (e.g., D100 = 7.2 kWh, D1,000 = 72.2 kWh).</p>
+
+        <div class="grid-2">
+          <div>
+            <label for="dalasiInput">Amount Paid (GMD / Dalasi)</label>
+            <input type="number" id="dalasiInput" min="1" step="1" value="100" placeholder="Enter Dalasi amount" />
+            <div class="quick-pills">
+              <button type="button" class="pill-btn" data-amount="100">D100</button>
+              <button type="button" class="pill-btn" data-amount="200">D200</button>
+              <button type="button" class="pill-btn" data-amount="500">D500</button>
+              <button type="button" class="pill-btn" data-amount="1000">D1,000</button>
+            </div>
+          </div>
+
+          <div>
+            <label for="tariffSelect">Meter Tariff Category (PURA)</label>
+            <select id="tariffSelect">
+              <option value="13.85" selected>Domestic Residential — D13.85 / kWh</option>
+              <option value="13.89">Agriculture — D13.89 / kWh</option>
+              <option value="14.90">Commercial — D14.90 / kWh</option>
+              <option value="15.90">Hotel / Industrial — D15.90 / kWh</option>
+              <option value="custom">Custom Rate (Edit below)</option>
+            </select>
+            <div id="customRateWrap" class="hidden" style="margin-top: 0.6rem;">
+              <label for="customRateInput">Custom Tariff (D / kWh)</label>
