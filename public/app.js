@@ -1,6 +1,6 @@
 // Replace YOUR_SUPABASE_ANON_KEY with your Publishable key from Supabase Project Settings -> API Keys
-const SUPABASE_URL = "https://supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://ggmsdvicirbfodswzilf.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_jnJt6-2gsHXdbMdQEEWL5w_00k4bsE1";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
