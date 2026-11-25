@@ -117,9 +117,11 @@
             <select id="citySelect"></select>
           </div>
           <div>
-            <label for="wardSelect">2. Town / Ward</label>
-            <select id="wardSelect"></select>
-          </div>
+         <label for="wardSelect">2. Town / Ward</label>
+         <select id="wardSelect"></select>
+         <input type="text" id="customWardInput" class="hidden" maxlength="80" placeholder="Enter your town or village name" style="margin-top: 0.5rem;" />
+       </div>
+
           <div>
             <label for="landmarkInput">3. Landmark / Junction (Optional)</label>
             <input type="text" id="landmarkInput" maxlength="100" placeholder="e.g., Near Jamisa Junction" />
@@ -208,3 +210,40 @@
             </select>
             <div id="customRateWrap" class="hidden" style="margin-top: 0.6rem;">
               <label for="customRateInput">Custom Tariff (D / kWh)</label>
+
+                       <input type="number" id="customRateInput" step="0.01" min="1" value="13.85" />
+            </div>
+          </div>
+        </div>
+
+        <div class="calc-result">
+          <span>Estimated Meter Receipt</span>
+          <strong id="kwhOutput">7.2 kWh</strong>
+          <small id="calcBreakdown" class="muted">D100 ÷ D13.85/kWh = 7.22 kWh → 7.2 kWh on receipt</small>
+        </div>
+
+        <p class="disclaimer">
+          <strong>Note:</strong> If your Cashpower meter has outstanding arrears, municipal/TV levies, or first-purchase standing charges, NAWEC automatically deducts a percentage before vending units.
+        </p>
+      </div>
+    </section>
+
+    <!-- TAB 3: NAWEC Power Stations & Feeder Directory -->
+    <section id="stationsTab" class="tab-panel hidden">
+      <div class="card">
+        <h2>🏭 NAWEC Power Stations &amp; Key Substations</h2>
+        <p class="muted">Major generation plants and transmission substations serving the Greater Banjul Area and West Coast Region.</p>
+        <div id="stationsList" class="stations-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>NawecTrack GM • Community Utility Monitor for The Gambia</p>
+    <p class="muted">Security: PostgreSQL RLS • 15m Rate-Limit Trigger • Salted Device Hash • XSS Sanitization</p>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
+     
