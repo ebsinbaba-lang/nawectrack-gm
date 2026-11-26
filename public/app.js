@@ -614,3 +614,248 @@ async function initAdminMode() {
     const password = document.getElementById("adminPassword").value;
     const msg = document.getElementById("adminLoginMsg");
     msg.textContent = "Authenticating...";
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error || !data.user) {
+      msg.textContent = `⚠️ ${error ? error.message : "Login failed."}`;
+      msg.style.color = "#ef4444";
+      return;
+    }
+
+    const ok = await loadAdminProfile(data.user.email);
+    if (!ok) {
+      await sb.auth.signOut();
+      msg.textContent = "⛔ Access denied: Not an active NAWEC admin.";
+      msg.style.color = "#ef4444";
+      return;
+    }
+
+    msg.textContent = "";
+    document.getElementById("adminLoginForm").reset();
+  });
+
+  document.getElementById("adminLogoutBtn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentAdminProfile = null;
+    document.getElementById("adminControls").classList.add("hidden");
+    document.getElementById("adminLoginForm").classList.remove("hidden");
+    document.getElementById("mainAdminUserSection").classList.add("hidden");
+  });
+
+  document.getElementById("alertBroadcastForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById("adminBroadcastMsg");
+    const city = document.getElementById("adminCity").value;
+    const ward = document.getElementById("adminWard").value || null;
+    const utility_type = document.getElementById("adminUtility").value;
+    const override_status = document.getElementById("adminStatus").value;
+    const message = document.getElementById("adminMessage").value.trim();
+
+    if (!message) return;
+    msgEl.textContent = "Broadcasting alert...";
+    msgEl.style.color = "#38bdf8";
+
+    const expires_at = new Date(Date.now() + TWENTY_FOUR_HOURS_MS).toISOString();
+    const { error } = await sb.from("nawec_alerts").insert([
+      {
+        city,
+        ward,
+        utility_type,
+        override_status,
+        message,
+        is_active: true,
+        expires_at,
+        created_by: currentAdminProfile?.email || "admin"
+      }
+    ]);
+
+    if (error) {
+      msgEl.textContent = `⚠️ ${error.message}`;
+      msgEl.style.color = "#ef4444";
+      return;
+    }
+
+    msgEl.textContent = "✅ Official NAWEC alert broadcasted!";
+    msgEl.style.color = "#22c55e";
+    document.getElementById("adminMessage").value = "";
+    await fetchAlerts();
+  });
+
+  document.getElementById("addAdminForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const addMsg = document.getElementById("addAdminMsg");
+    const newEmail = document.getElementById("newAdminEmail").value.trim();
+    const newName = document.getElementById("newAdminName").value.trim();
+
+    addMsg.textContent = "Adding admin...";
+    addMsg.style.color = "#38bdf8";
+
+    const { error } = await sb.rpc("add_nawec_admin", {
+      target_email: newEmail,
+      target_name: newName
+    });
+
+    if (error) {
+      addMsg.textContent = `⚠️ ${error.message}`;
+      addMsg.style.color = "#ef4444";
+      return;
+    }
+
+    addMsg.textContent = `✅ Added ${newEmail} as Standard Admin.`;
+    addMsg.style.color = "#22c55e";
+    document.getElementById("addAdminForm").reset();
+    await loadAdminUsersList();
+  });
+
+  // Restore existing Supabase session if already signed in
+  const { data: sessionData } = await sb.auth.getSession();
+  if (sessionData?.session?.user?.email) {
+    await loadAdminProfile(sessionData.session.user.email);
+  }
+}
+
+async function loadAdminProfile(email) {
+  const { data, error } = await sb
+    .from("nawec_admins")
+    .select("*")
+    .ilike("email", email)
+    .eq("is_blocked", false)
+    .maybeSingle();
+
+  if (error || !data) return false;
+
+  currentAdminProfile = data;
+  document.getElementById("adminLoginForm").classList.add("hidden");
+  document.getElementById("adminControls").classList.remove("hidden");
+  document.getElementById("adminUserLabel").textContent = `${data.email} (${data.role})`;
+  document.getElementById("adminRoleBadge").textContent =
+    data.role === "main_admin" ? "Main Admin" : "Standard Admin";
+
+  if (data.role === "main_admin") {
+    document.getElementById("mainAdminUserSection").classList.remove("hidden");
+    await loadAdminUsersList();
+  } else {
+    document.getElementById("mainAdminUserSection").classList.add("hidden");
+  }
+
+  renderAdminBlackouts();
+  renderAdminActiveAlerts();
+  return true;
+}
+
+function renderAdminActiveAlerts() {
+  const container = document.getElementById("activeAdminAlertsList");
+  if (!container) return;
+  if (!activeAlerts.length) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML =
+    `<h4>Active Broadcasts</h4>` +
+    activeAlerts
+      .map(
+        (a) => `<div class="status-box" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+          <div>
+            <strong>${escapeHTML(a.city)}${a.ward ? " (" + escapeHTML(a.ward) + ")" : ""} — ${escapeHTML(a.override_status)}</strong>
+            <p class="muted" style="margin:0.2rem 0 0;">${escapeHTML(a.message)}</p>
+          </div>
+          <button type="button" class="btn-outline btn-sm" onclick="deactivateAlert('${a.id}')">End</button>
+        </div>`
+      )
+      .join("");
+}
+
+window.deactivateAlert = async function (alertId) {
+  await sb.from("nawec_alerts").update({ is_active: false }).eq("id", alertId);
+  await fetchAlerts();
+};
+
+function renderAdminBlackouts() {
+  const list = document.getElementById("adminBlackoutList");
+  if (!list) return;
+  const escalations = recentReports.filter((r) => r.status === "OFF" || r.escalated_to_admin);
+
+  if (!escalations.length) {
+    list.innerHTML = `<li class="muted">No blackout escalations in the last 24h.</li>`;
+    return;
+  }
+
+  list.innerHTML = escalations
+    .map((r) => {
+      const flagBadge = r.is_flagged ? ` <span class="badge-sec">🚩 Flagged</span>` : "";
+      return `<li>
+        <strong>🔴 ${escapeHTML(r.utility_type.toUpperCase())} OFF</strong> — ${escapeHTML(r.ward)}, ${escapeHTML(r.city)}${flagBadge}
+        <br /><small class="muted">${formatTimeAgo(r.created_at)}</small>
+        <div style="margin-top:0.35rem;display:flex;gap:0.5rem;">
+          <button type="button" class="btn-outline btn-sm" onclick="toggleFlagReport('${r.id}', ${!r.is_flagged})">
+            ${r.is_flagged ? "Unflag" : "🚩 Flag"}
+          </button>
+          <button type="button" class="btn-outline btn-sm" onclick="deleteReport('${r.id}')">🗑️ Delete</button>
+        </div>
+      </li>`;
+    })
+    .join("");
+}
+
+window.toggleFlagReport = async function (id, flagState) {
+  await sb
+    .from("nawec_reports")
+    .update({
+      is_flagged: flagState,
+      flagged_by: flagState ? currentAdminProfile?.email : null,
+      flagged_at: flagState ? new Date().toISOString() : null
+    })
+    .eq("id", id);
+  await fetchReports();
+};
+
+window.deleteReport = async function (id) {
+  await sb.from("nawec_reports").delete().eq("id", id);
+  await fetchReports();
+};
+
+async function loadAdminUsersList() {
+  const list = document.getElementById("adminUsersList");
+  if (!list) return;
+  const { data, error } = await sb.from("nawec_admins").select("*").order("created_at", { ascending: true });
+  if (error || !Array.isArray(data)) return;
+
+  list.innerHTML = data
+    .map((u) => {
+      const isMain = u.role === "main_admin";
+      const actionBtn = isMain
+        ? `<span class="badge-sec">Main Admin</span>`
+        : `<button type="button" class="btn-outline btn-sm" onclick="toggleBlockAdmin('${escapeHTML(u.email)}', ${!u.is_blocked})">
+            ${u.is_blocked ? "Unblock" : "Block"}
+          </button>`;
+      return `<li style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+        <div>
+          <strong>${escapeHTML(u.full_name || u.email)}</strong>
+          <br /><small class="muted">${escapeHTML(u.email)} • ${u.is_blocked ? "🔴 Blocked" : "🟢 Active"}</small>
+        </div>
+        ${actionBtn}
+      </li>`;
+    })
+    .join("");
+}
+
+window.toggleBlockAdmin = async function (targetEmail, blockState) {
+  await sb.rpc("set_nawec_admin_blocked", {
+    target_email: targetEmail,
+    blocked: blockState
+  });
+  await loadAdminUsersList();
+};
+
+// --- REALTIME SUBSCRIPTIONS ---
+
+function subscribeRealtime() {
+  sb.channel("nawec-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "nawec_reports" }, () => {
+      fetchReports();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "nawec_alerts" }, () => {
+      fetchAlerts();
+    })
+    .subscribe();
+}
+
