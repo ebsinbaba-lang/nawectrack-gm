@@ -17,7 +17,7 @@ const GAMBIA_LOCATIONS = {
     "Portuguese Town",
     "New Town (Banjul)",
     "Box Bar / Marina",
-    "Denton Bridge / Bond Road"
+    "Denton Bridge / Bond Road" 
   ],
   "Serrekunda / KM": [
     "Serrekunda Central / Market",
