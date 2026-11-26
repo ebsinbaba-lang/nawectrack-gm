@@ -138,32 +138,103 @@ const GAMBIA_LOCATIONS = {
 };
 
 // NAWEC Power Stations & Key Substations Directory
-const NAWEC_STATIONS = [
-  {
-    name: "Brikama Power Station (I & II)",
-    type: "Heavy Fuel Oil / Thermal Generation",
-    serves: "Brikama, Yundum, Lamin, Banjulinding, and West Coast feeders",
-    mapUrl: "https://google.com"
-  },
-  {
-    name: "Kotu Power Station",
-    type: "Main GBA Thermal Generation & Dispatch",
-    serves: "Serrekunda, Kotu, Kololi, Bakau, Brusubi, Sukuta",
-    mapUrl: "https://google.com"
-  },
-  {
-    name: "Banjul (Half-Die) Power Station",
-    type: "Generation & Capital Feeder Hub",
-    serves: "Banjul Central, Half-Die, Port of Banjul, Denton Bridge",
-    mapUrl: "https://google.com"
-  },
-  {
-    name: "Jabang / Brusubi Substation",
-    type: "33kV Transmission & Distribution Substation",
-    serves: "Brusubi Phase 1 & 2, Jabang, Sukuta, Turntable, Tranquil",
-    mapUrl: "https://google.com"
+
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function renderStations(userLat = null, userLng = null) {
+  const list = document.getElementById("stationsList");
+  if (!list) return;
+
+  let enriched = NAWEC_STATIONS.map((s, idx) => ({
+    ...s,
+    idx,
+    distKm:
+      userLat !== null && userLng !== null
+        ? getDistanceKm(userLat, userLng, s.lat, s.lng)
+        : null
+  }));
+
+  let nearestIdx = -1;
+  if (userLat !== null && userLng !== null) {
+    enriched.sort((a, b) => a.distKm - b.distKm);
+    nearestIdx = enriched[0].idx;
   }
-];
+
+  list.innerHTML =
+    `<div id="stationGeoStatus" class="muted" style="margin-bottom:0.5rem;">
+      ${
+        userLat !== null
+          ? "📍 Sorted by proximity to your current GPS location."
+          : "Tap any station to check your distance (requests GPS permission) and open Google Maps."
+      }
+    </div>` +
+    enriched
+      .map((s) => {
+        const isNearest = s.idx === nearestIdx;
+        const distBadge =
+          s.distKm !== null
+            ? `<span class="badge-sec">${isNearest ? "⭐ Nearest • " : ""}${s.distKm.toFixed(1)} km away</span>`
+            : "";
+        return `<div class="status-box" style="${isNearest ? "border-color:#22c55e;" : ""}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <strong>🏭 ${escapeHTML(s.name)}</strong>
+            ${distBadge}
+          </div>
+          <small class="muted">${escapeHTML(s.type)}</small>
+          <p style="margin: 0.4rem 0;">${escapeHTML(s.serves)}</p>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="button" class="btn-outline btn-sm" onclick="checkStationProximity(${s.idx})">
+              📍 Check Distance &amp; Map
+            </button>
+          </div>
+        </div>`;
+      })
+      .join("");
+}
+
+window.checkStationProximity = function (stationIdx) {
+  const station = NAWEC_STATIONS[stationIdx];
+  const statusEl = document.getElementById("stationGeoStatus");
+
+  if (!("geolocation" in navigator)) {
+    window.open(station.mapUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = "⏳ Requesting location permission to calculate distance...";
+    statusEl.style.color = "#38bdf8";
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      renderStations(latitude, longitude);
+      const directionsUrl = `https://google.com{latitude},${longitude}&destination=${station.lat},${station.lng}`;
+      window.open(directionsUrl, "_blank", "noopener,noreferrer");
+    },
+    () => {
+      if (statusEl) {
+        statusEl.textContent = "⚠️ Location permission off/denied — opening Google Maps directly.";
+        statusEl.style.color = "#f59e0b";
+      }
+      window.open(station.mapUrl, "_blank", "noopener,noreferrer");
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+};
+
 
 let selectedUtility = "electricity";
 let recentReports = [];
@@ -538,54 +609,102 @@ function renderOfficialAlerts() {
 
 // --- CASHPOWER CALCULATOR & STATIONS ---
 
-function initCashpowerCalculator() {
-  const dalasiInput = document.getElementById("dalasiInput");
-  const tariffSelect = document.getElementById("tariffSelect");
-  const customRateWrap = document.getElementById("customRateWrap");
-  const customRateInput = document.getElementById("customRateInput");
-  const kwhOutput = document.getElementById("kwhOutput");
-  const calcBreakdown = document.getElementById("calcBreakdown");
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
 
-  function recalc() {
-    const amount = Math.max(0, parseFloat(dalasiInput.value) || 0);
-    const rate =
-      tariffSelect.value === "custom"
-        ? Math.max(0.01, parseFloat(customRateInput.value) || 13.85)
-        : parseFloat(tariffSelect.value);
-    const exact = amount / rate;
-    const rounded = exact.toFixed(1);
-    kwhOutput.textContent = `${rounded} kWh`;
-    calcBreakdown.textContent = `D${amount.toLocaleString()} ÷ D${rate.toFixed(2)}/kWh = ${exact.toFixed(2)} kWh → ${rounded} kWh on receipt`;
+function renderStations(userLat = null, userLng = null) {
+  const list = document.getElementById("stationsList");
+  if (!list) return;
+
+  let enriched = NAWEC_STATIONS.map((s, idx) => ({
+    ...s,
+    idx,
+    distKm:
+      userLat !== null && userLng !== null
+        ? getDistanceKm(userLat, userLng, s.lat, s.lng)
+        : null
+  }));
+
+  let nearestIdx = -1;
+  if (userLat !== null && userLng !== null) {
+    enriched.sort((a, b) => a.distKm - b.distKm);
+    nearestIdx = enriched[0].idx;
   }
 
-  dalasiInput.addEventListener("input", recalc);
-  customRateInput.addEventListener("input", recalc);
-  tariffSelect.addEventListener("change", () => {
-    customRateWrap.classList.toggle("hidden", tariffSelect.value !== "custom");
-    recalc();
-  });
-
-  document.querySelectorAll(".pill-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      dalasiInput.value = btn.dataset.amount;
-      recalc();
-    });
-  });
-
-  recalc();
+  list.innerHTML =
+    `<div id="stationGeoStatus" class="muted" style="margin-bottom:0.5rem;">
+      ${
+        userLat !== null
+          ? "📍 Sorted by proximity to your current GPS location."
+          : "Tap any station to check your distance (requests GPS permission) and open Google Maps."
+      }
+    </div>` +
+    enriched
+      .map((s) => {
+        const isNearest = s.idx === nearestIdx;
+        const distBadge =
+          s.distKm !== null
+            ? `<span class="badge-sec">${isNearest ? "⭐ Nearest • " : ""}${s.distKm.toFixed(1)} km away</span>`
+            : "";
+        return `<div class="status-box" style="${isNearest ? "border-color:#22c55e;" : ""}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <strong>🏭 ${escapeHTML(s.name)}</strong>
+            ${distBadge}
+          </div>
+          <small class="muted">${escapeHTML(s.type)}</small>
+          <p style="margin: 0.4rem 0;">${escapeHTML(s.serves)}</p>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="button" class="btn-outline btn-sm" onclick="checkStationProximity(${s.idx})">
+              📍 Check Distance &amp; Map
+            </button>
+          </div>
+        </div>`;
+      })
+      .join("");
 }
 
-function renderStations() {
-  const list = document.getElementById("stationsList");
-  list.innerHTML = NAWEC_STATIONS.map(
-    (s) => `<div class="status-box">
-      <strong>🏭 ${escapeHTML(s.name)}</strong>
-      <small class="muted">${escapeHTML(s.type)}</small>
-      <p style="margin: 0.4rem 0;">${escapeHTML(s.serves)}</p>
-      <a href="${escapeHTML(s.mapUrl)}" target="_blank" rel="noopener noreferrer" class="btn-outline btn-sm">Open Map</a>
-    </div>`
-  ).join("");
-}
+window.checkStationProximity = function (stationIdx) {
+  const station = NAWEC_STATIONS[stationIdx];
+  const statusEl = document.getElementById("stationGeoStatus");
+
+  if (!("geolocation" in navigator)) {
+    window.open(station.mapUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = "⏳ Requesting location permission to calculate distance...";
+    statusEl.style.color = "#38bdf8";
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      renderStations(latitude, longitude);
+      const directionsUrl = `https://google.com{latitude},${longitude}&destination=${station.lat},${station.lng}`;
+      window.open(directionsUrl, "_blank", "noopener,noreferrer");
+    },
+    () => {
+      if (statusEl) {
+        statusEl.textContent = "⚠️ Location permission off/denied — opening Google Maps directly.";
+        statusEl.style.color = "#f59e0b";
+      }
+      window.open(station.mapUrl, "_blank", "noopener,noreferrer");
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+};
+
 
 // --- TWO-TIER ADMIN PORTAL (MAIN ADMIN vs STANDARD ADMIN) ---
 
