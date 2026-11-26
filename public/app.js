@@ -250,6 +250,19 @@ function initPWAInstall() {
     installBtn.classList.add("hidden");
   });
 }
+  const homeBrandBtn = document.getElementById("homeBrandBtn");
+  if (homeBrandBtn) {
+    homeBrandBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      document.getElementById("adminPanel")?.classList.add("hidden");
+      tabs.forEach((t) => t.classList.remove("active"));
+      panels.forEach((p) => p.classList.add("hidden"));
+      document.querySelector('[data-tab="trackerTab"]')?.classList.add("active");
+      document.getElementById("trackerTab")?.classList.remove("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
 
 function initTabs() {
   const tabs = document.querySelectorAll(".tab");
