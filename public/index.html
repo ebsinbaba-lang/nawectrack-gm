@@ -131,18 +131,120 @@
     </nav>
 
     <!-- Area tracker, reporting tools, and cashpower calculator components -->
-    <section id="trackerTab" class="tab-panel active">
-      <!-- Live status panels and community reporting forms -->
+    
+      <section id="trackerTab" class="tab-panel active stack">
+      <div class="card stack">
+        <div class="card-header">
+          <h2>📍 Select Your Area</h2>
+          <span class="badge-sec">24h Live Feed</span>
+        </div>
+        <div class="grid-2">
+          <div>
+            <label for="citySelect">Region / Municipality</label>
+            <select id="citySelect"></select>
+          </div>
+          <div>
+            <label for="wardSelect">Town / Ward</label>
+            <select id="wardSelect"></select>
+          </div>
+        </div>
+        <div id="customWardWrap" class="hidden">
+          <label for="customWardInput">Enter Specific Village / Area</label>
+          <input type="text" id="customWardInput" maxlength="60" placeholder="e.g., Soma, Farafenni, Basse, Gunjur..." />
+        </div>
+
+        <div class="grid-2 status-cards">
+          <div class="status-box" id="elecStatusBox">
+            <span class="status-label">⚡ Electricity</span>
+            <strong id="elecStatusText" class="status-value">Checking...</strong>
+            <small id="elecLastUpdated" class="muted">Awaiting reports</small>
+          </div>
+          <div class="status-box" id="waterStatusBox">
+            <span class="status-label">💧 Water Supply</span>
+            <strong id="waterStatusText" class="status-value">Checking...</strong>
+            <small id="waterLastUpdated" class="muted">Awaiting reports</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="card stack">
+        <h2>📣 Report Current Status</h2>
+        <p class="muted">Tap a button below to update your neighborhood. Rate-limited to 1 report per 15 mins to prevent spam.</p>
+        <div class="grid-2">
+          <button type="button" class="btn-status btn-on" data-utility="electricity" data-status="ON">🟢 Light is ON</button>
+          <button type="button" class="btn-status btn-off" data-utility="electricity" data-status="OFF">🔴 Light is OFF</button>
+          <button type="button" class="btn-status btn-on" data-utility="water" data-status="ON">💧 Water is ON</button>
+          <button type="button" class="btn-status btn-off" data-utility="water" data-status="OFF">🚫 Water is OFF</button>
+        </div>
+        <p id="reportFeedback" class="feedback-msg"></p>
+      </div>
+
+      <div class="card stack">
+        <div class="card-header">
+          <h2>🕒 Recent Community Alerts (Last 24h)</h2>
+          <button type="button" id="refreshFeedBtn" class="btn-outline btn-sm">↻ Refresh</button>
+        </div>
+        <ul id="recentFeedList" class="feed-list">
+          <li class="muted">Loading live reports...</li>
+        </ul>
+      </div>
     </section>
 
-    <section id="cashpowerTab" class="tab-panel hidden">
-      <!-- NAWEC Cashpower unit calculator -->
+    <section id="cashpowerTab" class="tab-panel hidden stack">
+      <div class="card stack">
+        <div class="card-header">
+          <h2>🧮 NAWEC Cashpower Calculator</h2>
+          <span class="badge-sec">PURA Tariff Est.</span>
+        </div>
+        <p class="muted">Estimate how many kilowatt-hours (kWh) you will receive after PURA tariff bands and 15% VAT.</p>
+        <div class="grid-2">
+          <div>
+            <label for="tariffCategory">Meter Category</label>
+            <select id="tariffCategory">
+              <option value="domestic">Domestic (Residential)</option>
+              <option value="commercial">Commercial / Shop</option>
+            </select>
+          </div>
+          <div>
+            <label for="gmdAmount">Amount to Buy (GMD)</label>
+            <input type="number" id="gmdAmount" min="25" step="5" value="500" placeholder="e.g., 500" />
+          </div>
+        </div>
+        <button type="button" id="calcCashpowerBtn" class="btn-primary">Calculate Units (kWh)</button>
+        <div id="cashpowerResult" class="status-box stack">
+          <span class="status-label">Estimated Units</span>
+          <strong id="estimatedKwh" class="status-value">-- kWh</strong>
+          <small id="tariffBreakdown" class="muted">Enter GMD amount and tap Calculate.</small>
+        </div>
+      </div>
     </section>
 
-    <section id="stationsTab" class="tab-panel hidden">
-      <!-- Power stations and substations overview -->
+    <section id="stationsTab" class="tab-panel hidden stack">
+      <div class="card stack">
+        <div class="card-header">
+          <h2>🏭 NAWEC Power Stations &amp; Offices</h2>
+          <span class="badge-sec">Directory</span>
+        </div>
+        <ul id="stationsList" class="feed-list">
+          <li>
+            <strong>Brikama Power Station (IPP &amp; HFO)</strong>
+            <p class="muted">West Coast Region • Main generation hub feeding Greater Banjul &amp; Kombo.</p>
+          </li>
+          <li>
+            <strong>Kotu Power Station &amp; Dispatch Centre</strong>
+            <p class="muted">Kanifing Municipality • Primary load dispatch &amp; transmission substation.</p>
+          </li>
+          <li>
+            <strong>Banjul (Half-Die) Power Station</strong>
+            <p class="muted">Banjul • Island feeder distribution &amp; emergency backup.</p>
+          </li>
+          <li>
+            <strong>NAWEC Customer Care &amp; Fault Reporting</strong>
+            <p class="muted">Mamadi Maniyang Highway, Kanifing • Fault Hotline: 124 / +220 437 6607</p>
+          </li>
+        </ul>
+      </div>
     </section>
-  </main>
 
   <footer class="app-footer">
     <p>NawecTrack GM • Community Utility Monitor for The Gambia</p>
