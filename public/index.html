@@ -124,15 +124,15 @@
       </div>
     </section>
 
-        <nav class="tabs" role="tablist">
+      <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="trackerTab" type="button">⚡ Live Status</button>
       <button class="tab" data-tab="cashpowerTab" type="button">🧮 Cashpower Calc</button>
       <button class="tab" data-tab="stationsTab" type="button">🏭 Power Stations</button>
     </nav>
 
-    <!-- Area tracker, reporting tools, and cashpower calculator components -->
     
-      <section id="trackerTab" class="tab-panel active stack">
+        <!-- TAB 1: LIVE STATUS & COMMUNITY REPORTING -->
+    <section id="trackerTab" class="tab-panel active stack">
       <div class="card stack">
         <div class="card-header">
           <h2>📍 Select Your Area</h2>
@@ -148,33 +148,45 @@
             <select id="wardSelect"></select>
           </div>
         </div>
-        <div id="customWardWrap" class="hidden">
-          <label for="customWardInput">Enter Specific Village / Area</label>
-          <input type="text" id="customWardInput" maxlength="60" placeholder="e.g., Soma, Farafenni, Basse, Gunjur..." />
+        <input type="text" id="customWardInput" class="hidden" maxlength="60" placeholder="Type your village, town, or area..." />
+
+        <div class="status-box">
+          <span class="status-label" id="citySummaryTitle">City Overview</span>
+          <strong class="status-value" id="citySummaryStatus">Checking...</strong>
+          <small class="muted" id="citySummaryMeta">Awaiting reports</small>
         </div>
 
         <div class="grid-2 status-cards">
-          <div class="status-box" id="elecStatusBox">
-            <span class="status-label">⚡ Electricity</span>
-            <strong id="elecStatusText" class="status-value">Checking...</strong>
-            <small id="elecLastUpdated" class="muted">Awaiting reports</small>
+          <div class="status-box">
+            <span class="status-label">⚡ Electricity — <span id="selectedWardName1">Area</span></span>
+            <strong id="wardElecStatus" class="status-value">Checking...</strong>
+            <small id="wardElecMeta" class="muted">Awaiting reports</small>
           </div>
-          <div class="status-box" id="waterStatusBox">
-            <span class="status-label">💧 Water Supply</span>
-            <strong id="waterStatusText" class="status-value">Checking...</strong>
-            <small id="waterLastUpdated" class="muted">Awaiting reports</small>
+          <div class="status-box">
+            <span class="status-label">💧 Water — <span id="selectedWardName2">Area</span></span>
+            <strong id="wardWaterStatus" class="status-value">Checking...</strong>
+            <small id="wardWaterMeta" class="muted">Awaiting reports</small>
           </div>
         </div>
       </div>
 
       <div class="card stack">
-        <h2>📣 Report Current Status</h2>
-        <p class="muted">Tap a button below to update your neighborhood. Rate-limited to 1 report per 15 mins to prevent spam.</p>
+        <div class="card-header">
+          <h2>📣 Report Status</h2>
+          <span class="badge-sec" id="reportLocationLabel">Area</span>
+        </div>
+
         <div class="grid-2">
-          <button type="button" class="btn-status btn-on" data-utility="electricity" data-status="ON">🟢 Light is ON</button>
-          <button type="button" class="btn-status btn-off" data-utility="electricity" data-status="OFF">🔴 Light is OFF</button>
-          <button type="button" class="btn-status btn-on" data-utility="water" data-status="ON">💧 Water is ON</button>
-          <button type="button" class="btn-status btn-off" data-utility="water" data-status="OFF">🚫 Water is OFF</button>
+          <button type="button" class="util-btn active" data-utility="electricity">⚡ Electricity</button>
+          <button type="button" class="util-btn" data-utility="water">💧 Water Supply</button>
+        </div>
+
+        <input type="text" id="landmarkInput" maxlength="80" placeholder="Optional landmark (e.g., Near Brusubi Turntable, Westfield)..." />
+
+        <div class="grid-3">
+          <button type="button" class="btn-status btn-on" data-status="ON">🟢 Light is ON</button>
+          <button type="button" class="btn-status btn-partial" data-status="LOW_VOLTAGE">🟡 Low Voltage</button>
+          <button type="button" class="btn-status btn-off" data-status="OFF">🔴 Light is OFF</button>
         </div>
         <p id="reportFeedback" class="feedback-msg"></p>
       </div>
@@ -184,11 +196,68 @@
           <h2>🕒 Recent Community Alerts (Last 24h)</h2>
           <button type="button" id="refreshFeedBtn" class="btn-outline btn-sm">↻ Refresh</button>
         </div>
-        <ul id="recentFeedList" class="feed-list">
+        <ul id="reportsFeed" class="feed-list">
           <li class="muted">Loading live reports...</li>
         </ul>
       </div>
     </section>
+
+    <!-- TAB 2: CASHPOWER UNIT CALCULATOR -->
+    <section id="cashpowerTab" class="tab-panel hidden stack">
+      <div class="card stack">
+        <div class="card-header">
+          <h2>🧮 NAWEC Cashpower Calculator</h2>
+          <span class="badge-sec">PURA Tariff</span>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <label for="dalasiInput">Amount (GMD)</label>
+            <input type="number" id="dalasiInput" min="10" step="5" value="500" />
+          </div>
+          <div>
+            <label for="tariffSelect">Tariff Band (D / kWh)</label>
+            <select id="tariffSelect">
+              <option value="13.85">Domestic Standard (D13.85/kWh)</option>
+              <option value="11.20">Social / Lifeline Band (D11.20/kWh)</option>
+              <option value="16.40">Commercial / Shop (D16.40/kWh)</option>
+              <option value="custom">Custom Rate (D/kWh)</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="customRateWrap" class="hidden">
+          <label for="customRateInput">Custom Rate (GMD per kWh)</label>
+          <input type="number" id="customRateInput" min="0.1" step="0.05" value="13.85" />
+        </div>
+
+        <div class="pill-row">
+          <button type="button" class="pill-btn btn-outline btn-sm" data-amount="100">D100</button>
+          <button type="button" class="pill-btn btn-outline btn-sm" data-amount="250">D250</button>
+          <button type="button" class="pill-btn btn-outline btn-sm" data-amount="500">D500</button>
+          <button type="button" class="pill-btn btn-outline btn-sm" data-amount="1000">D1,000</button>
+          <button type="button" class="pill-btn btn-outline btn-sm" data-amount="2000">D2,000</button>
+        </div>
+
+        <div class="status-box stack">
+          <span class="status-label">Estimated Cashpower Units</span>
+          <strong id="kwhOutput" class="status-value">36.1 kWh</strong>
+          <small id="calcBreakdown" class="muted"></small>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: POWER STATIONS -->
+    <section id="stationsTab" class="tab-panel hidden stack">
+      <div class="card stack">
+        <div class="card-header">
+          <h2>🏭 NAWEC Power Stations &amp; Substations</h2>
+          <span class="badge-sec">Directory</span>
+        </div>
+        <div id="stationsList" class="stack"></div>
+      </div>
+    </section>
+
 
     <section id="cashpowerTab" class="tab-panel hidden stack">
       <div class="card stack">
