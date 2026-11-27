@@ -7,7 +7,6 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const CUSTOM_WARD_VALUE = "__CUSTOM__";
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-// 3-Level Gambian Location Directory (Banjul, GBA, West Coast & Kombo)
 const GAMBIA_LOCATIONS = {
   "Banjul": [
     "Banjul Central",
@@ -137,7 +136,6 @@ const GAMBIA_LOCATIONS = {
   ]
 };
 
-// NAWEC Power Stations & Key Substations Directory
 const NAWEC_STATIONS = [
   {
     name: "Kotu Power Station",
@@ -211,8 +209,6 @@ let activeAlerts = [];
 let currentAdminProfile = null;
 let deferredPrompt = null;
 
-// --- SECURITY HELPERS ---
-
 function escapeHTML(str) {
   if (!str) return "";
   return String(str)
@@ -245,8 +241,6 @@ function formatTimeAgo(isoString) {
   const diffHr = Math.floor(diffMin / 60);
   return `${diffHr}h ${diffMin % 60}m ago`;
 }
-
-// --- INITIALIZATION ---
 
 document.addEventListener("DOMContentLoaded", async () => {
   initPWAInstall();
@@ -353,3 +347,272 @@ function initLocationPickers() {
     const customOpt = document.createElement("option");
     customOpt.value = CUSTOM_WARD_VALUE;
     customOpt.textContent = "➕ Other (Type Custom Town/Area)";
+    wardSelect.appendChild(customOpt);
+
+    customWardInput.classList.add("hidden");
+    customWardInput.value = "";
+    updateLocationLabels();
+    renderConsensusAndFeed();
+  }
+
+  citySelect.addEventListener("change", populateWards);
+  wardSelect.addEventListener("change", () => {
+    const isCustom = wardSelect.value === CUSTOM_WARD_VALUE;
+    customWardInput.classList.toggle("hidden", !isCustom);
+    if (isCustom) customWardInput.focus();
+    updateLocationLabels();
+    renderConsensusAndFeed();
+  });
+
+  customWardInput.addEventListener("input", () => {
+    updateLocationLabels();
+    renderConsensusAndFeed();
+  });
+
+  populateWards();
+}
+
+function updateLocationLabels() {
+  const city = document.getElementById("citySelect").value;
+  const ward = getActiveWardName();
+  document.getElementById("citySummaryTitle").textContent = `${city} Overview`;
+  document.getElementById("selectedWardName1").textContent = ward;
+  document.getElementById("selectedWardName2").textContent = ward;
+  document.getElementById("reportLocationLabel").textContent = `${ward}, ${city}`;
+}
+
+function initReportControls() {
+  const utilBtns = document.querySelectorAll(".util-btn");
+  const statusBtns = document.querySelectorAll(".btn-status");
+
+  utilBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      utilBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      selectedUtility = btn.dataset.utility;
+
+      const labelWord = selectedUtility === "electricity" ? "Light" : "Water";
+      document.querySelector('[data-status="ON"]').textContent = `🟢 ${labelWord} is ON`;
+      document.querySelector('[data-status="LOW_VOLTAGE"]').textContent =
+        selectedUtility === "electricity" ? "🟡 Low Voltage" : "🟡 Low Pressure";
+      document.querySelector('[data-status="OFF"]').textContent = `🔴 ${labelWord} is OFF`;
+    });
+  });
+
+  statusBtns.forEach((btn) => {
+    btn.addEventListener("click", () => submitReport(btn.dataset.status, btn.textContent.trim()));
+  });
+
+  document.getElementById("refreshFeedBtn")?.addEventListener("click", fetchReports);
+}
+
+// --- DATA FETCHING & CONSENSUS ENGINE ---
+
+async function fetchReports() {
+  const since = new Date(Date.now() - TWENTY_FOUR_HOURS_MS).toISOString();
+  const { data, error } = await sb
+    .from("nawec_reports")
+    .select("*")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(250);
+
+  if (!error && Array.isArray(data)) {
+    recentReports = data;
+    renderConsensusAndFeed();
+    renderAdminBlackouts();
+  }
+}
+
+async function fetchAlerts() {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await sb
+    .from("nawec_alerts")
+    .select("*")
+    .eq("is_active", true)
+    .gt("expires_at", nowIso)
+    .order("created_at", { ascending: false });
+
+  if (!error && Array.isArray(data)) {
+    activeAlerts = data;
+    renderOfficialAlerts();
+    renderAdminActiveAlerts();
+  }
+}
+
+async function submitReport(status, clickedLabel) {
+  const feedback = document.getElementById("reportFeedback");
+  const city = document.getElementById("citySelect").value;
+  const ward = getActiveWardName();
+  const landmark = document.getElementById("landmarkInput").value.trim();
+
+  if (!ward || ward === "Custom Area") {
+    feedback.textContent = "⚠️ Please select or type your town/ward first.";
+    feedback.style.color = "#f59e0b";
+    return;
+  }
+
+  feedback.textContent = `⏳ You clicked "${clickedLabel}" for ${ward}, ${city} — submitting...`;
+  feedback.style.color = "#38bdf8";
+
+  try {
+    const reporter_hash = await getReporterHash();
+    const { error } = await sb.from("nawec_reports").insert([
+      {
+        city,
+        ward,
+        landmark: landmark || null,
+        utility_type: selectedUtility,
+        status,
+        reporter_hash
+      }
+    ]);
+
+    if (error) {
+      feedback.textContent = `⚠️ ${error.message}`;
+      feedback.style.color = "#ef4444";
+      return;
+    }
+
+    const escalationNote =
+      status === "OFF"
+        ? " 🚨 Blackout alert also forwarded to NAWEC Admin Portal."
+        : "";
+    feedback.textContent = `✅ Confirmed: You reported "${clickedLabel}" in ${ward}, ${city}.${escalationNote}`;
+    feedback.style.color = "#22c55e";
+    await fetchReports();
+  } catch (err) {
+    feedback.textContent = "⚠️ Network error while submitting report.";
+    feedback.style.color = "#ef4444";
+  }
+}
+
+function summarizeStatus(reports) {
+  if (!reports.length) return { text: "No Data", meta: "No reports in last 24h" };
+  const latest = reports[0];
+  const map = {
+    ON: "🟢 ON",
+    LOW_VOLTAGE: "🟡 Low / Partial",
+    OFF: "🔴 OFF (Outage)"
+  };
+  return {
+    text: map[latest.status] || latest.status,
+    meta: `${reports.length} report(s) • Latest ${formatTimeAgo(latest.created_at)}`
+  };
+}
+
+function renderConsensusAndFeed() {
+  const city = document.getElementById("citySelect").value;
+  const ward = getActiveWardName();
+  const cutoff = Date.now() - TWENTY_FOUR_HOURS_MS;
+
+  const validUserReports = recentReports.filter(
+    (r) => new Date(r.created_at).getTime() >= cutoff && !r.is_flagged
+  );
+
+  const cityReports = validUserReports.filter((r) => r.city === city);
+  const wardElec = cityReports.filter((r) => r.ward === ward && r.utility_type === "electricity");
+  const wardWater = cityReports.filter((r) => r.ward === ward && r.utility_type === "water");
+
+  const citySum = summarizeStatus(cityReports);
+  document.getElementById("citySummaryStatus").textContent = citySum.text;
+  document.getElementById("citySummaryMeta").textContent = citySum.meta;
+
+  const elecSum = summarizeStatus(wardElec);
+  document.getElementById("wardElecStatus").textContent = elecSum.text;
+  document.getElementById("wardElecMeta").textContent = elecSum.meta;
+
+  const waterSum = summarizeStatus(wardWater);
+  document.getElementById("wardWaterStatus").textContent = waterSum.text;
+  document.getElementById("wardWaterMeta").textContent = waterSum.meta;
+
+  const feedEl = document.getElementById("reportsFeed");
+  if (!validUserReports.length) {
+    feedEl.innerHTML = `<li class="muted">No recent alerts in the last 24 hours.</li>`;
+    return;
+  }
+
+  feedEl.innerHTML = validUserReports
+    .slice(0, 30)
+    .map((r) => {
+      const icon = r.utility_type === "electricity" ? "⚡" : "💧";
+      const statusBadge =
+        r.status === "ON"
+          ? "🟢 ON"
+          : r.status === "LOW_VOLTAGE"
+          ? "🟡 Low Voltage/Pressure"
+          : "🔴 OFF (Blackout)";
+      const landmarkTxt = r.landmark ? ` • Near ${escapeHTML(r.landmark)}` : "";
+      return `<li>
+        <strong>${icon} ${statusBadge}</strong> — ${escapeHTML(r.ward)}, ${escapeHTML(r.city)}${landmarkTxt}
+        <br /><small class="muted">${formatTimeAgo(r.created_at)} • Auto-expires after 24h</small>
+      </li>`;
+    })
+    .join("");
+}
+
+function renderOfficialAlerts() {
+  const box = document.getElementById("officialAlertsSection");
+  if (!activeAlerts.length) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  box.classList.remove("hidden");
+  box.innerHTML = activeAlerts
+    .map(
+      (a) => `<div class="card" style="border-left: 4px solid #f59e0b; margin-bottom: 0.75rem;">
+        <strong>🛡️ OFFICIAL NAWEC NOTICE (${escapeHTML(a.override_status)}) — ${escapeHTML(a.city)}${a.ward ? " (" + escapeHTML(a.ward) + ")" : ""}</strong>
+        <p style="margin: 0.35rem 0 0;">${escapeHTML(a.message)}</p>
+      </div>`
+    )
+    .join("");
+}
+
+// --- CASHPOWER CALCULATOR & STATIONS ---
+
+function initCashpowerCalculator() {
+  const amountInput = document.getElementById("dalasiInput");
+  const bandSelect = document.getElementById("tariffSelect");
+  const customRateWrap = document.getElementById("customRateWrap");
+  const customRateInput = document.getElementById("customRateInput");
+  const outputEl = document.getElementById("kwhOutput");
+  const breakdownEl = document.getElementById("calcBreakdown");
+  const presetBtns = document.querySelectorAll("[data-amount]");
+
+  if (!amountInput || !bandSelect || !outputEl) return;
+
+  function calculate() {
+    const amount = Math.max(0, parseFloat(amountInput.value) || 0);
+    const isCustom = bandSelect.value === "custom";
+    if (customRateWrap) {
+      customRateWrap.classList.toggle("hidden", !isCustom);
+    }
+    const rate = isCustom
+      ? Math.max(0.01, parseFloat(customRateInput?.value) || 13.85)
+      : parseFloat(bandSelect.value) || 13.85;
+
+    const units = amount / rate;
+    outputEl.textContent = `${units.toFixed(1)} kWh`;
+    if (breakdownEl) {
+      breakdownEl.textContent = `D${amount.toLocaleString()} ÷ D${rate.toFixed(2)}/kWh`;
+    }
+  }
+
+  amountInput.addEventListener("input", calculate);
+  bandSelect.addEventListener("change", calculate);
+  customRateInput?.addEventListener("input", calculate);
+
+  presetBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      amountInput.value = btn.dataset.amount;
+      calculate();
+    });
+  });
+
+  calculate();
+}
+
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
