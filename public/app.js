@@ -1,5 +1,5 @@
 // Supabase Configuration
-const SUPABASE_URL = "https://supabase.co";
+const SUPABASE_URL = "https://ggmsdvicirbfodswzilf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_jnJt6-2gsHXdbMdQEEWL5w_00k4bsE1";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -900,3 +900,92 @@ window.deactivateAlert = async function (alertId) {
   await sb.from("nawec_alerts").update({ is_active: false }).eq("id", alertId);
   await fetchAlerts();
 };  
+function renderAdminBlackouts() {
+  const list = document.getElementById("adminBlackoutList");
+  if (!list) return;
+  const escalations = recentReports.filter((r) => r.status === "OFF" || r.escalated_to_admin);
+
+  if (!escalations.length) {
+    list.innerHTML = `<li class="muted">No blackout escalations in the last 24h.</li>`;
+    return;
+  }
+
+  list.innerHTML = escalations
+    .map((r) => {
+      const flagBadge = r.is_flagged ? ` <span class="badge-sec">🚩 Flagged</span>` : "";
+      return `<li>
+        <strong>🔴 ${escapeHTML(r.utility_type.toUpperCase())} OFF</strong> — ${escapeHTML(r.ward)}, ${escapeHTML(r.city)}${flagBadge}
+        <br /><small class="muted">${formatTimeAgo(r.created_at)}</small>
+        <div style="margin-top:0.35rem;display:flex;gap:0.5rem;">
+          <button type="button" class="btn-outline btn-sm" onclick="toggleFlagReport('${r.id}', ${!r.is_flagged})">
+            ${r.is_flagged ? "Unflag" : "🚩 Flag"}
+          </button>
+          <button type="button" class="btn-outline btn-sm" onclick="deleteReport('${r.id}')">🗑️ Delete</button>
+        </div>
+      </li>`;
+    })
+    .join("");
+}
+
+window.toggleFlagReport = async function (id, flagState) {
+  await sb
+    .from("nawec_reports")
+    .update({
+      is_flagged: flagState,
+      flagged_by: flagState ? currentAdminProfile?.email : null,
+      flagged_at: flagState ? new Date().toISOString() : null
+    })
+    .eq("id", id);
+  await fetchReports();
+};
+
+window.deleteReport = async function (id) {
+  await sb.from("nawec_reports").delete().eq("id", id);
+  await fetchReports();
+};
+
+async function loadAdminUsersList() {
+  const list = document.getElementById("adminUsersList");
+  if (!list) return;
+  const { data, error } = await sb.from("nawec_admins").select("*").order("created_at", { ascending: true });
+  if (error || !Array.isArray(data)) return;
+
+  list.innerHTML = data
+    .map((u) => {
+      const isMain = u.role === "main_admin";
+      const actionBtn = isMain
+        ? `<span class="badge-sec">Main Admin</span>`
+        : `<button type="button" class="btn-outline btn-sm" onclick="toggleBlockAdmin('${escapeHTML(u.email)}', ${!u.is_blocked})">
+            ${u.is_blocked ? "Unblock" : "Block"}
+          </button>`;
+      return `<li style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+        <div>
+          <strong>${escapeHTML(u.full_name || u.email)}</strong>
+          <br /><small class="muted">${escapeHTML(u.email)} • ${u.is_blocked ? "🔴 Blocked" : "🟢 Active"}</small>
+        </div>
+        ${actionBtn}
+      </li>`;
+    })
+    .join("");
+}
+
+window.toggleBlockAdmin = async function (targetEmail, blockState) {
+  await sb.rpc("set_nawec_admin_blocked", {
+    target_email: targetEmail,
+    blocked: blockState
+  });
+  await loadAdminUsersList();
+};
+
+// --- REALTIME SUBSCRIPTIONS ---
+
+function subscribeRealtime() {
+  sb.channel("nawec-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "nawec_reports" }, () => {
+      fetchReports();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "nawec_alerts" }, () => {
+      fetchAlerts();
+    })
+    .subscribe();
+}
