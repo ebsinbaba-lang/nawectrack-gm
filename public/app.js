@@ -659,8 +659,9 @@ function renderStations(userLat = null, userLng = null) {
           s.distKm !== null
             ? `<span class="badge-sec">${isNearest ? "⭐ Nearest • " : ""}${s.distKm.toFixed(1)} km away</span>`
             : "";
-        const coords = `${s.lat},${s.lng}`;
-        const mapLink = `https://google.com{encodeURIComponent(coords)}`;
+        const mapLink =
+          "https://google.com" +
+          encodeURIComponent(s.lat + "," + s.lng);
         return `<div class="status-box" style="${isNearest ? "border-color:#22c55e;" : ""}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
             <strong>🏭 ${escapeHTML(s.name)}</strong>
@@ -681,25 +682,6 @@ function renderStations(userLat = null, userLng = null) {
       .join("");
 }
 
-    }).addTo(activeLeafletMap);
-    L.marker([activeStation.lat, activeStation.lng])
-      .addTo(activeLeafletMap)
-      .bindPopup(`<b>${escapeHTML(activeStation.name)}</b><br>${escapeHTML(activeStation.serves)}`)
-      .openPopup();
-  }
-}
-
-  const statusEl = document.getElementById("stationGeoStatus");
-
-  if (!("geolocation" in navigator)) {
-    renderStations(null, null, stationIdx);
-    return;
-  }
-
-  if (statusEl) {
-    statusEl.textContent = "⏳ Requesting location permission to calculate distance...";
-    statusEl.style.color = "#38bdf8";
-  }
 window.checkStationProximity = function (stationIdx) {
   const statusEl = document.getElementById("stationGeoStatus");
 
