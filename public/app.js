@@ -245,12 +245,11 @@ function formatTimeAgo(isoString) {
 document.addEventListener("DOMContentLoaded", async () => {
   initPWAInstall();
   initTabs();
+  await initAdminMode();
   initLocationPickers();
   initReportControls();
   initCashpowerCalculator();
   renderStations();
-  await initAdminMode();
-
   await Promise.all([fetchReports(), fetchAlerts()]);
   subscribeRealtime();
 
