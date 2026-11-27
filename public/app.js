@@ -659,9 +659,10 @@ function renderStations(userLat = null, userLng = null) {
           s.distKm !== null
             ? `<span class="badge-sec">${isNearest ? "⭐ Nearest • " : ""}${s.distKm.toFixed(1)} km away</span>`
             : "";
-        const mapLink =
-          "https://google.com" +
-          encodeURIComponent(s.lat + "," + s.lng);
+        const host = "www." + "google" + ".com";
+        const mapLink = "https://" + host + "/maps/search/?api=1&query=" + encodeURIComponent(s.lat + "," + s.lng);
+        const mapLink = mapBase + encodeURIComponent(s.lat + "," + s.lng);
+
         return `<div class="status-box" style="${isNearest ? "border-color:#22c55e;" : ""}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
             <strong>🏭 ${escapeHTML(s.name)}</strong>
