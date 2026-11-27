@@ -616,3 +616,292 @@ function initCashpowerCalculator() {
 function getDistanceKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
+
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function renderStations(userLat = null, userLng = null) {
+  const list = document.getElementById("stationsList");
+  if (!list) return;
+
+  let enriched = NAWEC_STATIONS.map((s, idx) => ({
+    ...s,
+    idx,
+    distKm:
+      userLat !== null && userLng !== null
+        ? getDistanceKm(userLat, userLng, s.lat, s.lng)
+        : null
+  }));
+
+  let nearestIdx = -1;
+  if (userLat !== null && userLng !== null) {
+    enriched.sort((a, b) => a.distKm - b.distKm);
+    nearestIdx = enriched[0].idx;
+  }
+
+  list.innerHTML =
+    `<div id="stationGeoStatus" class="muted" style="margin-bottom:0.5rem;">
+      ${
+        userLat !== null
+          ? "📍 Sorted by proximity to your current GPS location."
+          : "Tap any station to check your distance (requests GPS permission) and open Google Maps."
+      }
+    </div>` +
+    enriched
+      .map((s) => {
+        const isNearest = s.idx === nearestIdx;
+        const distBadge =
+          s.distKm !== null
+            ? `<span class="badge-sec">${isNearest ? "⭐ Nearest • " : ""}${s.distKm.toFixed(1)} km away</span>`
+            : "";
+        return `<div class="status-box" style="${isNearest ? "border-color:#22c55e;" : ""}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <strong>🏭 ${escapeHTML(s.name)}</strong>
+            ${distBadge}
+          </div>
+          <small class="muted">${escapeHTML(s.type)}</small>
+          <p style="margin: 0.4rem 0;">${escapeHTML(s.serves)}</p>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="button" class="btn-outline btn-sm" onclick="checkStationProximity(${s.idx})">
+              📍 Check Distance &amp; Map
+            </button>
+          </div>
+        </div>`;
+      })
+      .join("");
+}
+
+window.checkStationProximity = function (stationIdx) {
+  const station = NAWEC_STATIONS[stationIdx];
+  const statusEl = document.getElementById("stationGeoStatus");
+
+  if (!("geolocation" in navigator)) {
+    window.open(station.mapUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = "⏳ Requesting location permission to calculate distance...";
+    statusEl.style.color = "#38bdf8";
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      renderStations(latitude, longitude);
+      const directionsUrl = `https://google.com{latitude},${longitude}&destination=${station.lat},${station.lng}`;
+      window.open(directionsUrl, "_blank", "noopener,noreferrer");
+    },
+    () => {
+      if (statusEl) {
+        statusEl.textContent = "⚠️ Location permission off/denied — opening Google Maps directly.";
+        statusEl.style.color = "#f59e0b";
+      }
+      window.open(station.mapUrl, "_blank", "noopener,noreferrer");
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+};
+
+// --- TWO-TIER ADMIN PORTAL (MAIN ADMIN vs STANDARD ADMIN) ---
+
+async function initAdminMode() {
+  const adminPanel = document.getElementById("adminPanel");
+  const toggleBtn = document.getElementById("toggleAdminBtn");
+  const params = new URLSearchParams(window.location.search);
+
+  if (params.get("admin") === "1") {
+    adminPanel.classList.remove("hidden");
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    adminPanel.classList.toggle("hidden");
+  });
+
+  const adminCity = document.getElementById("adminCity");
+  const adminWard = document.getElementById("adminWard");
+  Object.keys(GAMBIA_LOCATIONS).forEach((city) => {
+    const opt = document.createElement("option");
+    opt.value = city;
+    opt.textContent = city;
+    adminCity.appendChild(opt);
+  });
+  adminCity.addEventListener("change", () => {
+    adminWard.innerHTML = `<option value="">All Wards (City-Wide)</option>`;
+    (GAMBIA_LOCATIONS[adminCity.value] || []).forEach((w) => {
+      const opt = document.createElement("option");
+      opt.value = w;
+      opt.textContent = w;
+      adminWard.appendChild(opt);
+    });
+  });
+
+  document.getElementById("adminLoginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("adminEmail").value.trim();
+    const password = document.getElementById("adminPassword").value;
+    const msg = document.getElementById("adminLoginMsg");
+    msg.textContent = "Authenticating...";
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error || !data.user) {
+      msg.textContent = `⚠️ ${error ? error.message : "Login failed."}`;
+      msg.style.color = "#ef4444";
+      return;
+    }
+
+    const ok = await loadAdminProfile(data.user.email);
+    if (!ok) {
+      await sb.auth.signOut();
+      msg.textContent = "⛔ Access denied: Not an active NAWEC admin.";
+      msg.style.color = "#ef4444";
+      return;
+    }
+
+    msg.textContent = "";
+    document.getElementById("adminLoginForm").reset();
+  });
+
+  document.getElementById("adminLogoutBtn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    currentAdminProfile = null;
+    document.getElementById("adminControls").classList.add("hidden");
+    document.getElementById("adminLoginForm").classList.remove("hidden");
+    document.getElementById("mainAdminUserSection").classList.add("hidden");
+  });
+
+  document.getElementById("alertBroadcastForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById("adminBroadcastMsg");
+    const city = document.getElementById("adminCity").value;
+    const ward = document.getElementById("adminWard").value || null;
+    const utility_type = document.getElementById("adminUtility").value;
+    const override_status = document.getElementById("adminStatus").value;
+    const message = document.getElementById("adminMessage").value.trim();
+
+    if (!message) return;
+    msgEl.textContent = "Broadcasting alert...";
+    msgEl.style.color = "#38bdf8";
+
+    const expires_at = new Date(Date.now() + TWENTY_FOUR_HOURS_MS).toISOString();
+    const { error } = await sb.from("nawec_alerts").insert([
+      {
+        city,
+        ward,
+        utility_type,
+        override_status,
+        message,
+        is_active: true,
+        expires_at,
+        created_by: currentAdminProfile?.email || "admin"
+      }
+    ]);
+
+    if (error) {
+      msgEl.textContent = `⚠️ ${error.message}`;
+      msgEl.style.color = "#ef4444";
+      return;
+    }
+
+    msgEl.textContent = "✅ Official NAWEC alert broadcasted!";
+    msgEl.style.color = "#22c55e";
+    document.getElementById("adminMessage").value = "";
+    await fetchAlerts();
+  });
+
+  document.getElementById("addAdminForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const addMsg = document.getElementById("addAdminMsg");
+    const newEmail = document.getElementById("newAdminEmail").value.trim();
+    const newName = document.getElementById("newAdminName").value.trim();
+
+    addMsg.textContent = "Adding admin...";
+    addMsg.style.color = "#38bdf8";
+
+    const { error } = await sb.rpc("add_nawec_admin", {
+      target_email: newEmail,
+      target_name: newName
+    });
+
+    if (error) {
+      addMsg.textContent = `⚠️ ${error.message}`;
+      addMsg.style.color = "#ef4444";
+      return;
+    }
+
+    addMsg.textContent = `✅ Added ${newEmail} as Standard Admin.`;
+    addMsg.style.color = "#22c55e";
+    document.getElementById("addAdminForm").reset();
+    await loadAdminUsersList();
+  });
+
+  const { data: sessionData } = await sb.auth.getSession();
+  if (sessionData?.session?.user?.email) {
+    await loadAdminProfile(sessionData.session.user.email);
+  }
+}
+
+async function loadAdminProfile(email) {
+  const { data, error } = await sb
+    .from("nawec_admins")
+    .select("*")
+    .ilike("email", email)
+    .eq("is_blocked", false)
+    .maybeSingle();
+
+  if (error || !data) return false;
+
+  currentAdminProfile = data;
+  document.getElementById("adminLoginForm").classList.add("hidden");
+  document.getElementById("adminControls").classList.remove("hidden");
+  document.getElementById("adminUserLabel").textContent = `${data.email} (${data.role})`;
+  document.getElementById("adminRoleBadge").textContent =
+    data.role === "main_admin" ? "Main Admin" : "Standard Admin";
+
+  if (data.role === "main_admin") {
+    document.getElementById("mainAdminUserSection").classList.remove("hidden");
+    await loadAdminUsersList();
+  } else {
+    document.getElementById("mainAdminUserSection").classList.add("hidden");
+  }
+
+  renderAdminBlackouts();
+  renderAdminActiveAlerts();
+  return true;
+}
+
+function renderAdminActiveAlerts() {
+  const container = document.getElementById("activeAdminAlertsList");
+  if (!container) return;
+  if (!activeAlerts.length) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML =
+    `<h4>Active Broadcasts</h4>` +
+    activeAlerts
+      .map(
+        (a) => `<div class="status-box" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+          <div>
+            <strong>${escapeHTML(a.city)}${a.ward ? " (" + escapeHTML(a.ward) + ")" : ""} — ${escapeHTML(a.override_status)}</strong>
+            <p class="muted" style="margin:0.2rem 0 0;">${escapeHTML(a.message)}</p>
+          </div>
+          <button type="button" class="btn-outline btn-sm" onclick="deactivateAlert('${a.id}')">End</button>
+        </div>`
+      )
+      .join("");
+}
+
+window.deactivateAlert = async function (alertId) {
+  await sb.from("nawec_alerts").update({ is_active: false }).eq("id", alertId);
+  await fetchAlerts();
+};  
