@@ -625,9 +625,7 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-let activeLeafletMap = null;
-
-function renderStations(userLat = null, userLng = null, activeStationIdx = null) {
+function renderStations(userLat = null, userLng = null) {
   const list = document.getElementById("stationsList");
   if (!list) return;
 
@@ -646,26 +644,14 @@ function renderStations(userLat = null, userLng = null, activeStationIdx = null)
     nearestIdx = enriched[0].idx;
   }
 
-  const activeStation = activeStationIdx !== null ? NAWEC_STATIONS[activeStationIdx] : null;
-  const mapPreviewHtml = activeStation
-    ? `<div class="status-box" style="border-color:#38bdf8;margin-bottom:0.6rem;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-          <strong>🗺️ ${escapeHTML(activeStation.name)} (${activeStation.lat.toFixed(4)}, ${activeStation.lng.toFixed(4)})</strong>
-          <button type="button" class="btn-outline btn-sm" onclick="renderStations(${userLat}, ${userLng}, null)">✕ Close Map</button>
-        </div>
-        <div id="leafletStationMap" style="height:220px;width:100%;border-radius:8px;z-index:1;"></div>
-      </div>`
-    : "";
-
   list.innerHTML =
     `<div id="stationGeoStatus" class="muted" style="margin-bottom:0.5rem;">
       ${
         userLat !== null
           ? "📍 Sorted by proximity to your current GPS location."
-          : "Tap Check Distance for GPS proximity or View Map to inspect the station location."
+          : "Tap Check Distance to sort by GPS proximity, or Open Map to view location."
       }
     </div>` +
-    mapPreviewHtml +
     enriched
       .map((s) => {
         const isNearest = s.idx === nearestIdx;
@@ -673,6 +659,8 @@ function renderStations(userLat = null, userLng = null, activeStationIdx = null)
           s.distKm !== null
             ? `<span class="badge-sec">${isNearest ? "⭐ Nearest • " : ""}${s.distKm.toFixed(1)} km away</span>`
             : "";
+        const coords = `${s.lat},${s.lng}`;
+        const mapLink = `https://google.com{encodeURIComponent(coords)}`;
         return `<div class="status-box" style="${isNearest ? "border-color:#22c55e;" : ""}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
             <strong>🏭 ${escapeHTML(s.name)}</strong>
@@ -684,22 +672,15 @@ function renderStations(userLat = null, userLng = null, activeStationIdx = null)
             <button type="button" class="btn-outline btn-sm" onclick="checkStationProximity(${s.idx})">
               📍 Check Distance
             </button>
-            <button type="button" class="btn-outline btn-sm" onclick="renderStations(${userLat}, ${userLng}, ${s.idx})">
-              🗺️ View Map
-            </button>
+            <a href="${mapLink}" target="_blank" rel="noopener noreferrer" class="btn-outline btn-sm" style="text-decoration:none;">
+              🗺️ Open Map
+            </a>
           </div>
         </div>`;
       })
       .join("");
+}
 
-  if (activeStation && window.L) {
-    if (activeLeafletMap) {
-      activeLeafletMap.remove();
-      activeLeafletMap = null;
-    }
-    activeLeafletMap = L.map("leafletStationMap").setView([activeStation.lat, activeStation.lng], 13);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors"
     }).addTo(activeLeafletMap);
     L.marker([activeStation.lat, activeStation.lng])
       .addTo(activeLeafletMap)
@@ -719,18 +700,28 @@ function renderStations(userLat = null, userLng = null, activeStationIdx = null)
     statusEl.textContent = "⏳ Requesting location permission to calculate distance...";
     statusEl.style.color = "#38bdf8";
   }
+window.checkStationProximity = function (stationIdx) {
+  const statusEl = document.getElementById("stationGeoStatus");
+
+  if (!("geolocation" in navigator)) {
+    if (statusEl) statusEl.textContent = "⚠️ GPS not supported on this browser.";
+    return;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = "⏳ Requesting location permission to calculate distance...";
+    statusEl.style.color = "#38bdf8";
+  }
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const { latitude, longitude } = pos.coords;
-      renderStations(latitude, longitude, stationIdx);
+      renderStations(latitude, longitude);
     },
     () => {
-      renderStations(null, null, stationIdx);
-      const newStatusEl = document.getElementById("stationGeoStatus");
-      if (newStatusEl) {
-        newStatusEl.textContent = "⚠️ Location permission off/denied — showing station map pin.";
-        newStatusEl.style.color = "#f59e0b";
+      if (statusEl) {
+        statusEl.textContent = "⚠️ Location permission off/denied — tap Open Map to view any station.";
+        statusEl.style.color = "#f59e0b";
       }
     },
     { enableHighAccuracy: true, timeout: 8000 }
