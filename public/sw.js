@@ -1,10 +1,11 @@
-const CACHE_NAME = "nawectrack-gm-v5";
+const CACHE_NAME = "nawectrack-gm-v6";
 const ASSETS = [
   "/",
   "/index.html",
   "/style.css",
   "/app.js",
-  "/manifest.json"
+  "/manifest.json",
+  "/icon.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -24,14 +25,16 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.url.includes("supabase.co")) {
+  if (event.request.method !== "GET" || event.request.url.includes("supabase.co")) {
     return;
   }
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
         return response;
       })
       .catch(() => caches.match(event.request))
