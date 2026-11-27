@@ -649,7 +649,7 @@ function renderStations(userLat = null, userLng = null) {
       ${
         userLat !== null
           ? "📍 Sorted by proximity to your current GPS location."
-          : "Tap any station to check your distance (requests GPS permission) and open Google Maps."
+          : "Tap Check Distance to sort by GPS proximity, or Open Google Maps directly."
       }
     </div>` +
     enriched
@@ -659,6 +659,10 @@ function renderStations(userLat = null, userLng = null) {
           s.distKm !== null
             ? `<span class="badge-sec">${isNearest ? "⭐ Nearest • " : ""}${s.distKm.toFixed(1)} km away</span>`
             : "";
+        const mapHref =
+          userLat !== null && userLng !== null
+            ? `https://google.com{userLat},${userLng}&destination=${s.lat},${s.lng}`
+            : s.mapUrl;
         return `<div class="status-box" style="${isNearest ? "border-color:#22c55e;" : ""}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
             <strong>🏭 ${escapeHTML(s.name)}</strong>
@@ -668,8 +672,11 @@ function renderStations(userLat = null, userLng = null) {
           <p style="margin: 0.4rem 0;">${escapeHTML(s.serves)}</p>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <button type="button" class="btn-outline btn-sm" onclick="checkStationProximity(${s.idx})">
-              📍 Check Distance &amp; Map
+              📍 Check Distance
             </button>
+            <a href="${mapHref}" target="_blank" rel="noopener noreferrer" class="btn-outline btn-sm" style="text-decoration:none;">
+              🗺️ Open Google Maps
+            </a>
           </div>
         </div>`;
       })
@@ -695,18 +702,21 @@ window.checkStationProximity = function (stationIdx) {
       const { latitude, longitude } = pos.coords;
       renderStations(latitude, longitude);
       const directionsUrl = `https://google.com{latitude},${longitude}&destination=${station.lat},${station.lng}`;
+      const newStatusEl = document.getElementById("stationGeoStatus");
+      if (newStatusEl) {
+        newStatusEl.innerHTML = `📍 Distance updated! <a href="${directionsUrl}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;font-weight:600;">Open turn-by-turn directions to ${escapeHTML(station.name)} →</a>`;
+      }
       window.open(directionsUrl, "_blank", "noopener,noreferrer");
     },
     () => {
       if (statusEl) {
-        statusEl.textContent = "⚠️ Location permission off/denied — opening Google Maps directly.";
-        statusEl.style.color = "#f59e0b";
+        statusEl.innerHTML = `⚠️ Location permission off/denied — <a href="${station.mapUrl}" target="_blank" rel="noopener noreferrer" style="color:#f59e0b;font-weight:600;">Open ${escapeHTML(station.name)} on Google Maps →</a>`;
       }
-      window.open(station.mapUrl, "_blank", "noopener,noreferrer");
     },
     { enableHighAccuracy: true, timeout: 8000 }
   );
 };
+
 
 // --- TWO-TIER ADMIN PORTAL (MAIN ADMIN vs STANDARD ADMIN) ---
 
