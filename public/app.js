@@ -651,13 +651,14 @@ function renderStations(userLat = null, userLng = null, activeStationIdx = null)
           <strong>🗺️ ${escapeHTML(activeStation.name)} (${activeStation.lat.toFixed(4)}, ${activeStation.lng.toFixed(4)})</strong>
           <button type="button" class="btn-outline btn-sm" onclick="renderStations(${userLat}, ${userLng}, null)">✕ Close Map</button>
         </div>
-        <iframe
+          <iframe
           title="Station Map"
           width="100%"
           height="220"
           style="border:0;border-radius:8px;"
           loading="lazy"
-          src="https://openstreetmap.org{activeStation.lng - 0.02}%2C${activeStation.lat - 0.02}%2C${activeStation.lng + 0.02}%2C${activeStation.lat + 0.02}&layer=mapnik&marker=${activeStation.lat}%2C${activeStation.lng}">
+          referrerpolicy="no-referrer-when-downgrade"
+          src="https://google.com{activeStation.lat},${activeStation.lng}&z=14&output=embed">
         </iframe>
       </div>`
     : "";
