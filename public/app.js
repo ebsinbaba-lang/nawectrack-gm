@@ -625,6 +625,8 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+let activeLeafletMap = null;
+
 function renderStations(userLat = null, userLng = null, activeStationIdx = null) {
   const list = document.getElementById("stationsList");
   if (!list) return;
@@ -651,15 +653,7 @@ function renderStations(userLat = null, userLng = null, activeStationIdx = null)
           <strong>🗺️ ${escapeHTML(activeStation.name)} (${activeStation.lat.toFixed(4)}, ${activeStation.lng.toFixed(4)})</strong>
           <button type="button" class="btn-outline btn-sm" onclick="renderStations(${userLat}, ${userLng}, null)">✕ Close Map</button>
         </div>
-          <iframe
-          title="Station Map"
-          width="100%"
-          height="220"
-          style="border:0;border-radius:8px;"
-          loading="lazy"
-          referrerpolicy="no-referrer-when-downgrade"
-          src="https://google.com{activeStation.lat},${activeStation.lng}&z=14&output=embed">
-        </iframe>
+        <div id="leafletStationMap" style="height:220px;width:100%;border-radius:8px;z-index:1;"></div>
       </div>`
     : "";
 
@@ -697,9 +691,23 @@ function renderStations(userLat = null, userLng = null, activeStationIdx = null)
         </div>`;
       })
       .join("");
+
+  if (activeStation && window.L) {
+    if (activeLeafletMap) {
+      activeLeafletMap.remove();
+      activeLeafletMap = null;
+    }
+    activeLeafletMap = L.map("leafletStationMap").setView([activeStation.lat, activeStation.lng], 13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(activeLeafletMap);
+    L.marker([activeStation.lat, activeStation.lng])
+      .addTo(activeLeafletMap)
+      .bindPopup(`<b>${escapeHTML(activeStation.name)}</b><br>${escapeHTML(activeStation.serves)}`)
+      .openPopup();
+  }
 }
 
-window.checkStationProximity = function (stationIdx) {
   const statusEl = document.getElementById("stationGeoStatus");
 
   if (!("geolocation" in navigator)) {
