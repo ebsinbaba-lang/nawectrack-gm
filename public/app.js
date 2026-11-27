@@ -624,7 +624,7 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
       Math.sin(dLon / 2);
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
-//--- Station starts ---
+
 function renderStations(userLat = null, userLng = null, activeStationIdx = null) {
   const list = document.getElementById("stationsList");
   if (!list) return;
