@@ -800,7 +800,7 @@ async function initAdminMode() {
         message,
         is_active: true,
         expires_at,
-        created_by: currentAdminProfile?.email || "admin"
+        created_by: currentAdminProfile?.user_id || null
       }
     ]);
 
