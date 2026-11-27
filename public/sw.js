@@ -1,4 +1,4 @@
-const CACHE_NAME = "nawectrack-gm-v6";
+const CACHE_NAME = "nawectrack-gm-v7";
 const ASSETS = [
   "/",
   "/index.html",
