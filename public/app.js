@@ -260,7 +260,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   await Promise.all([fetchReports(), fetchAlerts()]);
   subscribeRealtime();
 
-  // Auto-prune reports older than 24 hours from the user portal every minute
   setInterval(() => {
     recentReports = recentReports.filter(
       (r) => Date.now() - new Date(r.created_at).getTime() < TWENTY_FOUR_HOURS_MS
@@ -353,3 +352,4 @@ function initLocationPickers() {
 
     const customOpt = document.createElement("option");
     customOpt.value = CUSTOM_WARD_VALUE;
+    customOpt.textContent = "➕ Other (Type Custom Town/Area)";
